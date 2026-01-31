@@ -89,7 +89,7 @@ _DEFAULT_INTENT_WORDS = (
 )
 INTENT_WORDS = set(os.getenv("LIVEKIT_INTENT_WORDS", _DEFAULT_INTENT_WORDS).lower().split(","))
 
-_DEFAULT_BACKCHANNEL_WORDS = "okay,ok,yeah,yes,yep,uh,um,hmm,hm,mhm,uh-huh,right,sure,gotcha,oh,ah,good,alright,understood,nice,wow,omg,great,excellent,perfect"
+_DEFAULT_BACKCHANNEL_WORDS = "okay,ok,yeah,yes,yep,uh,um,hmm,hm,mhm,uh-huh,uhhuh,right,sure,gotcha,oh,ah,good,alright,understood,nice,wow,omg,great,excellent,perfect,huh,uh,uhm"
 BACKCHANNEL_WORDS = set(os.getenv("LIVEKIT_BACKCHANNEL_WORDS", _DEFAULT_BACKCHANNEL_WORDS).lower().split(","))
 
 
