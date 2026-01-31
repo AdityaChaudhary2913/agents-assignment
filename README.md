@@ -1,6 +1,10 @@
 # LiveKit Intelligent Interruption Agent
 
-This project implements an intelligent interruption handling system for LiveKit Voice Agents. It differentiates between "backchannel" words (like "yeah", "ok") and actual interruptions, ensuring a seamless and natural conversation flow. The goal is to make the agent feel more human by allowing the user to affirm listener engagement without stopping the agent's speech, while still stopping immediately for commands or substantial input.
+**Assignment Submission:** LiveKit Intelligent Interruption Handling Challenge for Salescode.ai Gen AI Role Summer Internship Assignment by Aditya Chaudhary(22DCS002).
+
+🎥 **Demo Video:** [Watch the implementation and testing here](https://drive.google.com/file/d/1RluhAnQrEIBEWPVTCy06n_HR5zcuob2E/view?usp=sharing)
+
+This challenge's solution implements an intelligent interruption handling system for LiveKit Voice Agents. It differentiates between "backchannel" words (like "yeah", "ok") and actual interruptions, ensuring a seamless and natural conversation flow. The goal is to make the agent feel more human by allowing the user to affirm listener engagement without stopping the agent's speech, while still stopping immediately for commands or substantial input.
 
 ## 🚀 Key Features
 
@@ -8,27 +12,33 @@ This project implements an intelligent interruption handling system for LiveKit 
 *   **State-Aware Logic:** The filtering logic is context-sensitive. "Backchannel" words are treated as valid responses when the agent is silent (e.g., answering "Yes" to a question) and are only ignored when the agent is actively speaking.
 *   **Semantic Interruptions:** The system handles mixed sentences intelligently. A phrase like "Yeah wait a second" correctly triggers an interruption because it contains an intent word ("wait"), effectively prioritizing semantic meaning over simple word lists.
 *   **Zero-Latency / "False Start" Handling:** Implements a "Deferred Interruption" strategy. The low-level VAD (Voice Activity Detection) signal alone does not trigger an interruption when STT is active. Instead, the agent waits for the first interim transcript to determine if the speech is a backchannel to be ignored or a valid interruption.
-*   **Fully Configurable:** Intent words and backchannel words are managed via environment variables, allowing for easy tuning without code changes.
+*   **Fully Configurable:** Intent words and backchannel words are managed via a simple `config.yaml` file, allowing for easy tuning without code changes.
 
 ## 🛠️ Configuration
 
-The agent's behavior is configured using the `.env` file. You can adjust the lists of words that define the agent's sensitivity to interruptions.
+The agent's behavior is configured using the `config.yaml` file in the root directory. This allows for persistent configuration of interruption sensitivity.
 
-```dotenv
-# Intent Words: Words that will force an interruption immediately, 
-# even if they are short or appear amidst backchannels.
-LIVEKIT_INTENT_WORDS=stop,wait,pause,hold,enough,cancel,quit,exit,leave,abort
+### Using `config.yaml`
+Edit the `config.yaml` file in the root of your workspace:
 
-# Backchannel Words: Words/sounds that indicate listening but should NOT 
-# interrupt the agent while it is speaking.
-# NOTE: If you want a word like "good" to trigger a reaction/interruption, 
-# DO NOT include it in this list.
-LIVEKIT_BACKCHANNEL_WORDS=okay,ok,yeah,yes,yep,uh,um,hmm,hm,right,sure,gotcha,ah
+```yaml
+intent_words:
+  - stop
+  - wait
+  - pause
+  # ... (add words that force immediate interruption)
+
+backchannel_words:
+  - okay
+  - ok
+  - uhhuh  # handles "uh-huh" (punctuation stripped)
+  - uh-huh
+  # ... (add words that should be ignored while speaking)
 ```
 
 ## 🧠 Logic Overview & Implementation Details
 
-The core logic is implemented entirely within the **application logic layer** in `livekit-agents/livekit/agents/voice/agent_activity.py` (the `AgentActivity` class). 
+The core logic is implemented in the **application logic layer** within `livekit-agents/livekit/agents/voice/agent_activity.py` (the `AgentActivity` class), with helper utilities in `_utils.py`.
 
 ** Compliance Note:** As per assignment requirements, we **do not** modify the low-level VAD kernel. Instead, we implement a smart handling layer within the agent's existing event loop to process VAD and STT events intelligently.
 
@@ -46,20 +56,22 @@ The interruption decision happens inside `on_interim_transcript` and `on_final_t
     *   If **Speech is Active** (Agent is speaking): We enter the filtering logic.
 
 2.  **Token-Based Intent Analysis:**
-    *   The transcript is split into tokens. We check if **ANY** intent word (from `.env`) exists in the sentence.
+    *   The transcript is split into tokens. We check if **ANY** intent word (from `config.yaml`) exists in the sentence.
     *   *Example:* "Yeah hold on" -> Contains "hold" -> **INTERRUPT**.
     *   This check bypasses minimum word count constraints, ensuring commands like "Stop" work instantly.
 
 3.  **Backchannel Validation:**
-    *   If no intent words are found, we check if **ALL** words in the transcript are in the `LIVEKIT_BACKCHANNEL_WORDS` list.
+    *   If no intent words are found, we check if **ALL** words in the transcript are in the configured backchannel list.
     *   *Example:* "Yeah okay sure" -> All are backchannels -> **IGNORE** (Agent continues speaking).
     *   *Example:* "Yeah help" -> "help" is not a backchannel -> **INTERRUPT**.
 
 ### 3. Files Modified
 *   `livekit-agents/livekit/agents/voice/agent_activity.py`:
-    *   Added loading of `INTENT_WORDS` and `BACKCHANNEL_WORDS`.
-    *   Added `_is_only_backchannels` helper function.
+    *   Imports and uses logic from `_utils.py`.
     *   Updated `on_interim_transcript`, `on_final_transcript`, `on_end_of_turn`, and `on_vad_inference_done`.
+*   `livekit-agents/livekit/agents/voice/_utils.py`:
+    *   Contains configuration loading (`config.yaml` support).
+    *   Contains helper functions (`_load_config_words`, `_is_only_backchannels`).
 
 ## 🏃‍♂️ How to Run
 
@@ -70,7 +82,6 @@ The interruption decision happens inside `on_interim_transcript` and `on_final_t
         *   `LIVEKIT_URL`
         *   `LIVEKIT_API_KEY`
         *   `LIVEKIT_API_SECRET`
-    *   **Crucial:** Add the interruption configuration variables found in the "Configuration" section above to this `.env` file.
 
 2.  **Run the Test Agent:**
     You can run the basic agent in dev mode to test the functionality.

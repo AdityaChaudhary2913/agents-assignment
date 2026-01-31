@@ -4,7 +4,6 @@ import asyncio
 import contextvars
 import heapq
 import json
-import os
 import time
 from collections.abc import AsyncIterable, Coroutine, Sequence
 from dataclasses import dataclass
@@ -40,7 +39,7 @@ from ..telemetry import trace_types, tracer, utils as trace_utils
 from ..tokenize.basic import split_words
 from ..types import NOT_GIVEN, FlushSentinel, NotGivenOr
 from ..utils.misc import is_given
-from ._utils import _set_participant_attributes
+from ._utils import _set_participant_attributes, _is_only_backchannels, INTENT_WORDS
 from .agent import (
     Agent,
     ModelSettings,
@@ -83,29 +82,6 @@ if TYPE_CHECKING:
 
 _AgentActivityContextVar = contextvars.ContextVar["AgentActivity"]("agents_activity")
 _SpeechHandleContextVar = contextvars.ContextVar["SpeechHandle"]("agents_speech_handle")
-
-_DEFAULT_INTENT_WORDS = (
-    "stop,wait,pause,hold,enough,cancel,quit,exit,leave,forget,stop it,halt,terminate,abort"
-)
-INTENT_WORDS = set(os.getenv("LIVEKIT_INTENT_WORDS", _DEFAULT_INTENT_WORDS).lower().split(","))
-
-_DEFAULT_BACKCHANNEL_WORDS = "okay,ok,yeah,yes,yep,uh,um,hmm,hm,mhm,uh-huh,uhhuh,right,sure,gotcha,oh,ah,good,alright,understood,nice,wow,omg,great,excellent,perfect,huh,uh,uhm"
-BACKCHANNEL_WORDS = set(os.getenv("LIVEKIT_BACKCHANNEL_WORDS", _DEFAULT_BACKCHANNEL_WORDS).lower().split(","))
-
-
-def _is_only_backchannels(text: str) -> bool:
-    """Check if transcript consists only of backchannel words."""
-    words = split_words(text.lower(), split_character=True)
-    if not words:
-        return False
-
-    # split_words returns list of tuples (word, start_pos, end_pos)
-    # Extract just the word text and normalize
-    normalized_words = [w[0].strip().rstrip('.!?,;:') for w in words]
-
-    # Check if ALL words are backchannels
-    return all(word in BACKCHANNEL_WORDS for word in normalized_words if word)
-
 
 @dataclass
 class _OnEnterData:
@@ -1192,7 +1168,7 @@ class AgentActivity(RecognitionHooks):
         )
         self._schedule_speech(handle, SpeechHandle.SPEECH_PRIORITY_NORMAL)
 
-    
+
     def _execute_interruption(self) -> None:
         """Execute the actual interruption logic after validation."""
         opt = self._session.options
@@ -1267,7 +1243,7 @@ class AgentActivity(RecognitionHooks):
             return
 
         active_speech = ev.speech_duration >= self._session.options.min_interruption_duration
-        
+
         if active_speech and (
             self._turn_detection != "stt"
             or not self._stt_eos_received
@@ -1277,7 +1253,7 @@ class AgentActivity(RecognitionHooks):
             # 1. turn detection is not STT; or
             # 2. STT EOS hasn't been received yet; or
             # 3. VAD speech is still ongoing
-            
+
             # STT events (interim/final) will handle interruption logic appropriately.
             # We ONLY execute interruption here if there is NO STT (blind VAD interruption).
             if self.stt is None:
@@ -1312,15 +1288,15 @@ class AgentActivity(RecognitionHooks):
         ):
             # Validate before interrupting - only filter backchannels when agent is speaking
             text = ev.alternatives[0].text
-            
+
             should_interrupt = True
-            
+
             # Only filter backchannels if agent is currently speaking
             if self._current_speech is not None:
                 # Check for intent words token-wise
                 words = split_words(text.lower(), split_character=True)
                 normalized_words = [w[0].strip().rstrip('.!?,;:') for w in words]
-                
+
                 if any(w in INTENT_WORDS for w in normalized_words):
                     # Intent words always interrupt, even during agent speech
                     pass
@@ -1331,7 +1307,7 @@ class AgentActivity(RecognitionHooks):
                         "ignoring backchannel during agent speech (interim)",
                         extra={"transcript": text},
                     )
-            
+
             if should_interrupt:
                 self._execute_interruption()
 
@@ -1366,15 +1342,15 @@ class AgentActivity(RecognitionHooks):
         ):
             # Validate before interrupting - only filter backchannels when agent is speaking
             text = ev.alternatives[0].text
-            
+
             should_interrupt = True
-            
+
             # Only filter backchannels if agent is currently speaking
             if self._current_speech is not None:
                 # Check for intent words token-wise
                 words = split_words(text.lower(), split_character=True)
                 normalized_words = [w[0].strip().rstrip('.!?,;:') for w in words]
-                
+
                 if any(w in INTENT_WORDS for w in normalized_words):
                     # Intent words always interrupt, even during agent speech
                     pass
@@ -1385,7 +1361,7 @@ class AgentActivity(RecognitionHooks):
                         "ignoring backchannel during agent speech (final)",
                         extra={"transcript": text},
                     )
-            
+
             if should_interrupt:
                 self._execute_interruption()
 
